@@ -380,6 +380,80 @@
             color: rgba(255, 255, 255, 0.9);
         }
 
+        /* SPC/WPC Outlooks Table */
+        .outlook-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .outlook-table th {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 12px 8px;
+            text-align: center;
+            font-family: 'Oswald', sans-serif;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 13px;
+        }
+
+        .outlook-table td {
+            padding: 15px 10px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .outlook-table tr:first-child th:first-child {
+            background: rgba(0, 0, 0, 0.5);
+            text-align: left;
+            font-size: 11px;
+            color: var(--accent);
+        }
+
+        .outlook-row-label {
+            text-align: left !important;
+            font-family: 'Oswald', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .outlook-tstm {
+            background: rgba(255, 165, 0, 0.2);
+        }
+
+        .outlook-marginal {
+            background: rgba(0, 100, 0, 0.3);
+            color: #90ee90;
+        }
+
+        .outlook-slight {
+            background: rgba(255, 255, 0, 0.3);
+            color: #ffff00;
+        }
+
+        .outlook-enhanced {
+            background: rgba(255, 140, 0, 0.3);
+            color: #ffa500;
+        }
+
+        .outlook-moderate {
+            background: rgba(255, 0, 0, 0.3);
+            color: #ff6b6b;
+        }
+
+        .outlook-high {
+            background: rgba(255, 0, 255, 0.3);
+            color: #ff00ff;
+        }
+
+        .outlook-none {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
         .full-width {
             grid-column: 1 / -1;
         }
@@ -434,11 +508,16 @@
             </div>
         </div>
 
-        <!-- CURRENT CONDITIONS & RADAR -->
+        <!-- CURRENT CONDITIONS & OUTLOOKS -->
         <div class="grid">
             <div class="card">
                 <h2>📊 Current Conditions</h2>
                 <div id="currentConditions" class="loading">Loading observations...</div>
+            </div>
+
+            <div class="card">
+                <h2>🌩️ SPC/WPC Outlooks</h2>
+                <div id="outlooks" class="loading">Loading outlooks...</div>
             </div>
         </div>
 
@@ -516,6 +595,9 @@
                 const forecastResponse = await fetch(forecastUrl);
                 const forecastData = await forecastResponse.json();
                 displayForecast(forecastData.properties.periods);
+
+                // Fetch SPC and WPC outlooks
+                fetchOutlooks();
 
                 updateRefreshTime();
             } catch (error) {
@@ -694,6 +776,225 @@
             document.getElementById('forecast').innerHTML = html;
         }
 
+        async function fetchOutlooks() {
+            try {
+                // SPC provides day 1-3 convective outlooks
+                // WPC provides excessive rainfall outlooks
+                
+                const outlookData = {
+                    day1_convective: 'Not Expected',
+                    day2_convective: 'Not Expected', 
+                    day3_convective: 'Not Expected',
+                    day1_rainfall: 'Not Expected',
+                    day2_rainfall: 'Not Expected',
+                    day3_rainfall: 'Not Expected'
+                };
+
+                // Fetch SPC Day 1-3 Convective Outlooks
+                // SPC uses categorical outlooks: TSTM, MRGL, SLGT, ENH, MDT, HIGH
+                const spcDay1Url = `https://www.spc.noaa.gov/products/outlook/day1otlk_cat.lyr.geojson`;
+                const spcDay2Url = `https://www.spc.noaa.gov/products/outlook/day2otlk_cat.lyr.geojson`;
+                const spcDay3Url = `https://www.spc.noaa.gov/products/outlook/day3otlk_cat.lyr.geojson`;
+
+                // Check Day 1
+                try {
+                    const day1Response = await fetch(spcDay1Url);
+                    const day1Data = await day1Response.json();
+                    outlookData.day1_convective = parseConvectiveOutlook(day1Data, PARK_LAT, PARK_LON);
+                } catch (e) {
+                    console.log('SPC Day 1 unavailable');
+                }
+
+                // Check Day 2
+                try {
+                    const day2Response = await fetch(spcDay2Url);
+                    const day2Data = await day2Response.json();
+                    outlookData.day2_convective = parseConvectiveOutlook(day2Data, PARK_LAT, PARK_LON);
+                } catch (e) {
+                    console.log('SPC Day 2 unavailable');
+                }
+
+                // Check Day 3
+                try {
+                    const day3Response = await fetch(spcDay3Url);
+                    const day3Data = await day3Response.json();
+                    outlookData.day3_convective = parseConvectiveOutlook(day3Data, PARK_LAT, PARK_LON);
+                } catch (e) {
+                    console.log('SPC Day 3 unavailable');
+                }
+
+                // Fetch WPC Excessive Rainfall Outlooks
+                const wpcDay1Url = `https://www.wpc.ncep.noaa.gov/qpf/excessive_rainfall_outlook_geojson.php?day=1`;
+                const wpcDay2Url = `https://www.wpc.ncep.noaa.gov/qpf/excessive_rainfall_outlook_geojson.php?day=2`;
+                const wpcDay3Url = `https://www.wpc.ncep.noaa.gov/qpf/excessive_rainfall_outlook_geojson.php?day=3`;
+
+                // Check WPC Day 1
+                try {
+                    const wpcDay1Response = await fetch(wpcDay1Url);
+                    const wpcDay1Data = await wpcDay1Response.json();
+                    outlookData.day1_rainfall = parseRainfallOutlook(wpcDay1Data, PARK_LAT, PARK_LON);
+                } catch (e) {
+                    console.log('WPC Day 1 unavailable');
+                }
+
+                // Check WPC Day 2
+                try {
+                    const wpcDay2Response = await fetch(wpcDay2Url);
+                    const wpcDay2Data = await wpcDay2Response.json();
+                    outlookData.day2_rainfall = parseRainfallOutlook(wpcDay2Data, PARK_LAT, PARK_LON);
+                } catch (e) {
+                    console.log('WPC Day 2 unavailable');
+                }
+
+                // Check WPC Day 3
+                try {
+                    const wpcDay3Response = await fetch(wpcDay3Url);
+                    const wpcDay3Data = await wpcDay3Response.json();
+                    outlookData.day3_rainfall = parseRainfallOutlook(wpcDay3Data, PARK_LAT, PARK_LON);
+                } catch (e) {
+                    console.log('WPC Day 3 unavailable');
+                }
+
+                displayOutlooks(outlookData);
+
+            } catch (error) {
+                console.error('Error fetching outlooks:', error);
+                document.getElementById('outlooks').innerHTML = 
+                    '<div class="error">Unable to load outlook data</div>';
+            }
+        }
+
+        function parseConvectiveOutlook(geojson, lat, lon) {
+            // Check if our location falls within any SPC outlook polygon
+            // Returns highest category that contains our point
+            if (!geojson || !geojson.features) return 'Not Expected';
+
+            const categories = ['HIGH', 'MDT', 'ENH', 'SLGT', 'MRGL', 'TSTM'];
+            
+            for (let category of categories) {
+                for (let feature of geojson.features) {
+                    if (feature.properties && feature.properties.LABEL2) {
+                        const label = feature.properties.LABEL2.toUpperCase();
+                        if (label.includes(category)) {
+                            // Simple point-in-polygon check
+                            if (isPointInPolygon(lat, lon, feature.geometry)) {
+                                return formatCategory(category);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return 'Not Expected';
+        }
+
+        function parseRainfallOutlook(geojson, lat, lon) {
+            // WPC uses categories: SLGT, MDT, HIGH
+            if (!geojson || !geojson.features) return 'Not Expected';
+
+            const categories = ['High', 'Moderate', 'Slight'];
+            
+            for (let category of categories) {
+                for (let feature of geojson.features) {
+                    if (feature.properties && feature.properties.VALID) {
+                        const risk = feature.properties.RISK || '';
+                        if (risk.toLowerCase() === category.toLowerCase()) {
+                            if (isPointInPolygon(lat, lon, feature.geometry)) {
+                                return category;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return 'Not Expected';
+        }
+
+        function isPointInPolygon(lat, lon, geometry) {
+            // Simple bounding box check (not perfect but good enough for operational use)
+            // A full point-in-polygon would require more complex ray casting
+            if (!geometry || !geometry.coordinates) return false;
+            
+            try {
+                let coords = geometry.coordinates;
+                if (geometry.type === 'MultiPolygon') {
+                    coords = coords[0]; // Take first polygon
+                }
+                if (coords && coords[0]) {
+                    coords = coords[0]; // Get outer ring
+                }
+
+                let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+                
+                for (let coord of coords) {
+                    const [cLon, cLat] = coord;
+                    minLat = Math.min(minLat, cLat);
+                    maxLat = Math.max(maxLat, cLat);
+                    minLon = Math.min(minLon, cLon);
+                    maxLon = Math.max(maxLon, cLon);
+                }
+
+                return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function formatCategory(category) {
+            const map = {
+                'TSTM': 'Thunderstorms',
+                'MRGL': 'Marginal',
+                'SLGT': 'Slight',
+                'ENH': 'Enhanced',
+                'MDT': 'Moderate',
+                'HIGH': 'High'
+            };
+            return map[category] || category;
+        }
+
+        function getCategoryClass(risk) {
+            const riskLower = risk.toLowerCase();
+            if (riskLower.includes('not expected')) return 'outlook-none';
+            if (riskLower.includes('thunderstorm')) return 'outlook-tstm';
+            if (riskLower.includes('marginal')) return 'outlook-marginal';
+            if (riskLower.includes('slight')) return 'outlook-slight';
+            if (riskLower.includes('enhanced')) return 'outlook-enhanced';
+            if (riskLower.includes('moderate')) return 'outlook-moderate';
+            if (riskLower.includes('high')) return 'outlook-high';
+            return '';
+        }
+
+        function displayOutlooks(data) {
+            const html = `
+                <table class="outlook-table">
+                    <thead>
+                        <tr>
+                            <th>Outlooks</th>
+                            <th>Day 1</th>
+                            <th>Day 2</th>
+                            <th>Day 3</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="outlook-row-label">Severe Thunderstorm</td>
+                            <td class="${getCategoryClass(data.day1_convective)}">${data.day1_convective}</td>
+                            <td class="${getCategoryClass(data.day2_convective)}">${data.day2_convective}</td>
+                            <td class="${getCategoryClass(data.day3_convective)}">${data.day3_convective}</td>
+                        </tr>
+                        <tr>
+                            <td class="outlook-row-label">Excessive Rainfall</td>
+                            <td class="${getCategoryClass(data.day1_rainfall)}">${data.day1_rainfall}</td>
+                            <td class="${getCategoryClass(data.day2_rainfall)}">${data.day2_rainfall}</td>
+                            <td class="${getCategoryClass(data.day3_rainfall)}">${data.day3_rainfall}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+            
+            document.getElementById('outlooks').innerHTML = html;
+        }
+
         function updateRefreshTime() {
             const now = new Date();
             document.getElementById('refreshTime').textContent = 
@@ -705,6 +1006,7 @@
             document.getElementById('alerts').innerHTML = '<div class="loading">Refreshing...</div>';
             document.getElementById('hrrr').innerHTML = '<div class="loading">Refreshing...</div>';
             document.getElementById('forecast').innerHTML = '<div class="loading">Refreshing...</div>';
+            document.getElementById('outlooks').innerHTML = '<div class="loading">Refreshing...</div>';
             fetchWeatherData();
         }
 
