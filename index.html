@@ -32,28 +32,29 @@
             background: linear-gradient(135deg, var(--bg-dark) 0%, #264653 100%);
             color: var(--text-light);
             min-height: 100vh;
-            padding: 20px;
+            padding: 10px;
             line-height: 1.6;
         }
 
         .container {
             max-width: 1600px;
             margin: 0 auto;
+            width: 100%;
         }
 
         .header {
             background: #a8dadc;
             border-radius: 0;
             border-left: 8px solid var(--secondary);
-            padding: 30px 40px;
-            margin-bottom: 20px;
+            padding: 20px 15px;
+            margin-bottom: 10px;
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
             text-align: center;
         }
 
         .header h1 {
             font-family: 'Oswald', sans-serif;
-            font-size: 42px;
+            font-size: 32px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 2px;
@@ -62,7 +63,7 @@
         }
 
         .header .subtitle {
-            font-size: 14px;
+            font-size: 13px;
             color: #000000;
             opacity: 0.8;
             text-transform: uppercase;
@@ -77,6 +78,7 @@
             display: inline-block;
             font-weight: 600;
             color: #000000;
+            font-size: 13px;
         }
 
         .station-fallback {
@@ -88,14 +90,16 @@
             justify-content: space-between;
             align-items: center;
             background: rgba(255, 255, 255, 0.1);
-            padding: 12px 40px;
-            margin-bottom: 20px;
+            padding: 12px 15px;
+            margin-bottom: 10px;
             border-left: 8px solid var(--secondary);
-            font-size: 13px;
+            font-size: 12px;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
         .refresh-bar button {
-            padding: 8px 20px;
+            padding: 8px 16px;
             background: var(--accent);
             color: var(--text-dark);
             border: none;
@@ -106,6 +110,7 @@
             text-transform: uppercase;
             letter-spacing: 1px;
             transition: all 0.3s ease;
+            font-size: 12px;
         }
 
         .refresh-bar button:hover {
@@ -116,14 +121,14 @@
 
         /* Alerts Section - Top Priority */
         .alerts-section {
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
 
         .alert {
             background: #ff0000;
             border-left: 8px solid #8b0000;
-            padding: 25px 30px;
-            margin-bottom: 15px;
+            padding: 20px 15px;
+            margin-bottom: 10px;
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
             animation: pulseAlert 2s ease-in-out infinite;
             color: #000000;
@@ -198,22 +203,22 @@
         /* Grid Layout */
         .grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
         }
 
         .card {
             background: rgba(255, 255, 255, 0.05);
             border-left: 8px solid var(--secondary);
-            padding: 30px;
+            padding: 20px 15px;
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
             backdrop-filter: blur(10px);
         }
 
         .card h2 {
             font-family: 'Oswald', sans-serif;
-            font-size: 28px;
+            font-size: 22px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 2px;
@@ -285,10 +290,16 @@
         }
 
         /* HRRR Table */
+        .hrrr-table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
         .hrrr-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            font-size: 12px;
+            min-width: 500px;
         }
 
         .hrrr-table th {
@@ -467,6 +478,28 @@
             color: rgba(255, 255, 255, 0.5);
         }
 
+        /* Radar Section */
+        .radar-container {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .radar-container img {
+            width: 100%;
+            max-width: 600px;
+            height: auto;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .radar-timestamp {
+            margin-top: 10px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
         .full-width {
             grid-column: 1 / -1;
         }
@@ -496,6 +529,40 @@
             }
             .current-grid {
                 grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .header .subtitle {
+                font-size: 11px;
+            }
+            
+            .card h2 {
+                font-size: 18px;
+            }
+            
+            .alert h3 {
+                font-size: 18px;
+            }
+            
+            .hrrr-table {
+                font-size: 11px;
+            }
+            
+            .hrrr-table th, .hrrr-table td {
+                padding: 8px 5px;
+            }
+            
+            .outlook-table {
+                font-size: 11px;
+            }
+            
+            .outlook-table th, .outlook-table td {
+                padding: 10px 5px;
             }
         }
 
@@ -582,10 +649,16 @@
             </div>
         </div>
 
-        <!-- HRRR FORECAST -->
+        <!-- RADAR -->
         <div class="card full-width">
-            <h2>📈 HRRR 12-Hour Forecast</h2>
-            <div id="hrrr" class="loading">Loading HRRR data...</div>
+            <h2>📡 KAMX Radar (124nm)</h2>
+            <div id="radar" class="loading">Loading radar...</div>
+        </div>
+
+        <!-- NDFD 12-HOUR FORECAST -->
+        <div class="card full-width">
+            <h2>📈 NDFD 12-Hour Forecast</h2>
+            <div id="hrrr" class="loading">Loading NDFD data...</div>
         </div>
 
         <!-- NWS 5-DAY FORECAST -->
@@ -666,6 +739,9 @@
 
                 // Fetch SPC and WPC outlooks
                 fetchOutlooks();
+
+                // Load radar
+                loadRadar();
 
                 updateRefreshTime();
             } catch (error) {
@@ -810,6 +886,7 @@
             const next12Hours = hourlyPeriods.slice(0, 12);
             
             let tableHTML = `
+                <div class="hrrr-table-container">
                 <table class="hrrr-table">
                     <thead>
                         <tr>
@@ -857,6 +934,7 @@
             tableHTML += `
                     </tbody>
                 </table>
+                </div>
             `;
 
             document.getElementById('hrrr').innerHTML = tableHTML;
@@ -1105,6 +1183,21 @@
             document.getElementById('outlooks').innerHTML = html;
         }
 
+        function loadRadar() {
+            // KAMX (Miami) Base Reflectivity, Tilt 1, 124nm range
+            // Using NOAA Ridge2 Radar system
+            const radarUrl = 'https://radar.weather.gov/ridge/standard/KAMX_0.gif';
+            
+            const html = `
+                <div class="radar-container">
+                    <img src="${radarUrl}" alt="KAMX Radar - Base Reflectivity" onerror="this.parentElement.innerHTML='<div class=error>Radar image temporarily unavailable</div>'">
+                    <div class="radar-timestamp">KAMX Base Reflectivity | Auto-refreshes every 5 minutes</div>
+                </div>
+            `;
+            
+            document.getElementById('radar').innerHTML = html;
+        }
+
         function updateRefreshTime() {
             const now = new Date();
             document.getElementById('refreshTime').textContent = 
@@ -1114,6 +1207,7 @@
         function refreshData() {
             document.getElementById('currentConditions').innerHTML = '<div class="loading">Refreshing...</div>';
             document.getElementById('alerts').innerHTML = '<div class="loading">Refreshing...</div>';
+            document.getElementById('radar').innerHTML = '<div class="loading">Refreshing...</div>';
             document.getElementById('hrrr').innerHTML = '<div class="loading">Refreshing...</div>';
             document.getElementById('forecast').innerHTML = '<div class="loading">Refreshing...</div>';
             document.getElementById('outlooks').innerHTML = '<div class="loading">Refreshing...</div>';
