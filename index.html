@@ -48,6 +48,7 @@
             padding: 30px 40px;
             margin-bottom: 20px;
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            text-align: center;
         }
 
         .header h1 {
@@ -258,6 +259,18 @@
             font-size: 20px;
             opacity: 0.8;
             margin-left: 4px;
+        }
+
+        .obs-metadata {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .obs-metadata div {
+            margin: 5px 0;
         }
 
         .wind-alert {
@@ -485,6 +498,54 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* Substack Link Section */
+        .substack-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 8px solid var(--accent);
+            padding: 30px;
+            text-align: center;
+            margin-top: 20px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .substack-section h3 {
+            font-family: 'Oswald', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            color: var(--accent);
+        }
+
+        .substack-section p {
+            font-size: 14px;
+            margin-bottom: 20px;
+            opacity: 0.9;
+        }
+
+        .substack-button {
+            display: inline-block;
+            padding: 15px 40px;
+            background: var(--accent);
+            color: var(--text-dark);
+            text-decoration: none;
+            font-family: 'Oswald', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .substack-button:hover {
+            background: var(--warning);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -531,6 +592,13 @@
         <div class="card full-width">
             <h2>📅 NWS 5-Day Forecast</h2>
             <div id="forecast" class="loading">Loading forecast...</div>
+        </div>
+
+        <!-- SUBSTACK SIGNUP -->
+        <div class="substack-section">
+            <h3>📧 Get Weather Updates</h3>
+            <p>Subscribe to PompanoWx for weekday, weekend, and special weather report mailings</p>
+            <a href="https://pompanowx.substack.com/" target="_blank" class="substack-button">Subscribe to PompanoWx</a>
         </div>
     </div>
 
@@ -620,6 +688,16 @@
                 (obs.windGust.value * 0.621371).toFixed(0) : null;
             const windDir = obs.windDirection.value || 0;
 
+            // Format observation time
+            const obsTime = obs.timestamp ? new Date(obs.timestamp).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            }) : 'N/A';
+
             // Check for high wind alert
             const maxWind = Math.max(parseInt(windSpeed), parseInt(windGust || 0));
             const windAlertClass = maxWind >= 30 ? 'wind-alert' : '';
@@ -654,6 +732,10 @@
                         </div>
                     </div>
                 </div>
+                <div class="obs-metadata">
+                    <div><strong>Station:</strong> ${currentStation || 'N/A'}</div>
+                    <div><strong>Observation Time:</strong> ${obsTime}</div>
+                </div>
             `;
 
             document.getElementById('currentConditions').innerHTML = html;
@@ -666,7 +748,33 @@
                 return;
             }
 
-            const html = alerts.map(alert => {
+            // Filter out marine and beach alerts
+            const marineKeywords = [
+                'rip current',
+                'high surf',
+                'marine',
+                'small craft',
+                'gale',
+                'storm warning',
+                'hurricane force wind',
+                'special marine',
+                'coastal flood',
+                'beach hazard',
+                'high seas'
+            ];
+
+            const landAlerts = alerts.filter(alert => {
+                const eventLower = alert.properties.event.toLowerCase();
+                return !marineKeywords.some(keyword => eventLower.includes(keyword));
+            });
+
+            if (landAlerts.length === 0) {
+                document.getElementById('alerts').innerHTML = 
+                    '<div class="no-alerts">✓ No Active Land-Based Alerts</div>';
+                return;
+            }
+
+            const html = landAlerts.map(alert => {
                 const props = alert.properties;
                 let alertClass = 'alert';
                 
@@ -707,10 +815,9 @@
                         <tr>
                             <th>Hour</th>
                             <th>Rain</th>
-                            <th>Lightning</th>
                             <th>Temp</th>
-                            <th>Wind</th>
-                            <th>Gusts</th>
+                            <th>Wind Gusts</th>
+                            <th>Cloud Cover</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -732,21 +839,17 @@
                 
                 const windClass = (parseInt(windGust) >= 30) ? 'wind-high' : '';
                 
-                // Simple lightning risk based on thunderstorm keywords and high PoP
-                const hasThunderstorm = period.shortForecast.toLowerCase().includes('thunder') || 
-                                       period.shortForecast.toLowerCase().includes('tstorm') ||
-                                       period.shortForecast.toLowerCase().includes('t-storm');
-                const lightningRisk = (hasThunderstorm || pop >= 60) ? 
-                    '<span class="lightning-indicator">⚡ RISK</span>' : '-';
+                // Get cloud cover from skyCover property
+                const cloudCover = period.skyCover ? period.skyCover.value : 'N/A';
+                const cloudCoverDisplay = cloudCover !== 'N/A' ? `${cloudCover}%` : 'N/A';
 
                 tableHTML += `
                     <tr>
                         <td class="hour-cell">${displayHour} ${ampm}</td>
                         <td class="precip-cell ${precipClass}">${pop}%</td>
-                        <td>${lightningRisk}</td>
                         <td class="temp-cell">${period.temperature}°F</td>
-                        <td class="wind-cell ${windClass}">${windSpeed} mph</td>
                         <td class="wind-cell ${windClass}">${windGust} mph</td>
+                        <td>${cloudCoverDisplay}</td>
                     </tr>
                 `;
             });
@@ -763,15 +866,22 @@
             // Get the next 10 periods (roughly 5 days - day and night)
             const forecastPeriods = periods.slice(0, 10);
             
-            const html = forecastPeriods.map(period => `
-                <div class="forecast-period">
-                    <h3>${period.name}</h3>
-                    <div class="forecast-temp">${period.temperature}°${period.temperatureUnit}</div>
-                    <div class="forecast-wind">${period.windSpeed} ${period.windDirection}</div>
-                    <div class="forecast-detail"><strong>${period.shortForecast}</strong></div>
-                    <div class="forecast-detail">${period.detailedForecast}</div>
-                </div>
-            `).join('');
+            const html = forecastPeriods.map(period => {
+                // Parse wind speed to check if >= 30 mph
+                const windMatch = period.windSpeed.match(/(\d+)/);
+                const windSpeed = windMatch ? parseInt(windMatch[1]) : 0;
+                const showWind = windSpeed >= 30;
+                
+                return `
+                    <div class="forecast-period">
+                        <h3>${period.name}</h3>
+                        <div class="forecast-temp">${period.temperature}°${period.temperatureUnit}</div>
+                        ${showWind ? `<div class="forecast-wind">⚠️ ${period.windSpeed} ${period.windDirection}</div>` : ''}
+                        <div class="forecast-detail"><strong>${period.shortForecast}</strong></div>
+                        <div class="forecast-detail">${period.detailedForecast}</div>
+                    </div>
+                `;
+            }).join('');
             
             document.getElementById('forecast').innerHTML = html;
         }
