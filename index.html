@@ -613,6 +613,15 @@
             transform: translateY(-2px);
             box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
         }
+
+        /* Version Number */
+        .version-info {
+            text-align: center;
+            padding: 20px;
+            font-size: 12px;
+            opacity: 0.6;
+            color: var(--text-light);
+        }
     </style>
 </head>
 <body>
@@ -672,6 +681,11 @@
             <h3>📧 Get Weather Updates</h3>
             <p>Subscribe to PompanoWx for weekday, weekend, and special weather report mailings</p>
             <a href="https://pompanowx.substack.com/" target="_blank" class="substack-button">Subscribe to PompanoWx</a>
+        </div>
+
+        <!-- VERSION INFO -->
+        <div class="version-info">
+            Boomers Weather Dashboard v0.4
         </div>
     </div>
 
@@ -894,7 +908,7 @@
                             <th>Rain</th>
                             <th>Temp</th>
                             <th>Wind Gusts</th>
-                            <th>Cloud Cover</th>
+                            <th>Weather</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -916,9 +930,14 @@
                 
                 const windClass = (parseInt(windGust) >= 30) ? 'wind-high' : '';
                 
-                // Get cloud cover from skyCover property
-                const cloudCover = period.skyCover ? period.skyCover.value : 'N/A';
-                const cloudCoverDisplay = cloudCover !== 'N/A' ? `${cloudCover}%` : 'N/A';
+                // Get weather conditions from shortForecast (this is from NDFD Weather element)
+                const weather = period.shortForecast || 'Clear';
+                
+                // Check for hazards in the detailed forecast
+                const hasHazard = period.detailedForecast && 
+                    (period.detailedForecast.toLowerCase().includes('thunder') ||
+                     period.detailedForecast.toLowerCase().includes('severe'));
+                const hazardIndicator = hasHazard ? '⚠️ ' : '';
 
                 tableHTML += `
                     <tr>
@@ -926,7 +945,7 @@
                         <td class="precip-cell ${precipClass}">${pop}%</td>
                         <td class="temp-cell">${period.temperature}°F</td>
                         <td class="wind-cell ${windClass}">${windGust} mph</td>
-                        <td>${cloudCoverDisplay}</td>
+                        <td style="font-size: 11px;">${hazardIndicator}${weather}</td>
                     </tr>
                 `;
             });
