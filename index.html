@@ -404,6 +404,19 @@
             color: rgba(255, 255, 255, 0.9);
         }
 
+        .forecast-timestamp {
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-left: 4px solid var(--accent);
+            margin-bottom: 15px;
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .forecast-timestamp strong {
+            color: var(--accent);
+        }
+
         /* SPC/WPC Outlooks Table */
         .outlook-table {
             width: 100%;
@@ -749,7 +762,7 @@
                 const forecastUrl = pointsData.properties.forecast;
                 const forecastResponse = await fetch(forecastUrl);
                 const forecastData = await forecastResponse.json();
-                displayForecast(forecastData.properties.periods);
+                displayForecast(forecastData.properties.periods, forecastData.properties.updated);
 
                 // Fetch SPC and WPC outlooks
                 fetchOutlooks();
@@ -959,11 +972,30 @@
             document.getElementById('hrrr').innerHTML = tableHTML;
         }
 
-        function displayForecast(periods) {
+        function displayForecast(periods, updatedTime) {
             // Get the next 10 periods (roughly 5 days - day and night)
             const forecastPeriods = periods.slice(0, 10);
             
-            const html = forecastPeriods.map(period => {
+            // Format the forecast issuance time
+            const issuedDate = new Date(updatedTime);
+            const issuedDisplay = issuedDate.toLocaleString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZoneName: 'short'
+            });
+            
+            let html = `
+                <div class="forecast-timestamp">
+                    <strong>Forecast Issued:</strong> ${issuedDisplay}
+                </div>
+            `;
+            
+            html += forecastPeriods.map(period => {
                 // Parse wind speed to check if >= 30 mph
                 const windMatch = period.windSpeed.match(/(\d+)/);
                 const windSpeed = windMatch ? parseInt(windMatch[1]) : 0;
