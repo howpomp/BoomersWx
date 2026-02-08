@@ -762,7 +762,15 @@
                 const forecastUrl = pointsData.properties.forecast;
                 const forecastResponse = await fetch(forecastUrl);
                 const forecastData = await forecastResponse.json();
-                displayForecast(forecastData.properties.periods, forecastData.properties.updated);
+                
+                // Try to get timestamp from multiple possible fields
+                const timestamp = forecastData.properties.updated || 
+                                 forecastData.properties.updateTime || 
+                                 forecastData.properties.generatedAt ||
+                                 (forecastData.properties.periods && forecastData.properties.periods[0] ? 
+                                  forecastData.properties.periods[0].startTime : null);
+                
+                displayForecast(forecastData.properties.periods, timestamp);
 
                 // Fetch SPC and WPC outlooks
                 fetchOutlooks();
@@ -976,18 +984,27 @@
             // Get the next 10 periods (roughly 5 days - day and night)
             const forecastPeriods = periods.slice(0, 10);
             
-            // Format the forecast issuance time
-            const issuedDate = new Date(updatedTime);
-            const issuedDisplay = issuedDate.toLocaleString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true,
-                timeZoneName: 'short'
-            });
+            // Format the forecast issuance time with error handling
+            let issuedDisplay = 'Not Available';
+            try {
+                if (updatedTime) {
+                    const issuedDate = new Date(updatedTime);
+                    if (!isNaN(issuedDate.getTime())) {
+                        issuedDisplay = issuedDate.toLocaleString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                            timeZoneName: 'short'
+                        });
+                    }
+                }
+            } catch (e) {
+                console.log('Error formatting forecast timestamp:', e);
+            }
             
             let html = `
                 <div class="forecast-timestamp">
