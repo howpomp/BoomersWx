@@ -1,0 +1,25 @@
+{
+  "name": "Boomers Weather Ops",
+  "short_name": "BoomersWx",
+  "description": "Real-time weather dashboard for Boca Raton — KBCT. GLM lightning, NEXRAD radar, NWS alerts.",
+  "start_url": "/BoomersWx/",
+  "scope": "/BoomersWx/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1b2a",
+  "theme_color": "#1d3557",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
