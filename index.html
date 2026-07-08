@@ -191,6 +191,20 @@
     .flt-ifr  { color: var(--red); }
     .flt-lifr { color: var(--magenta); }
 
+    /* ─── LTG CALLOUT ─── */
+    .ltg-callout {
+      margin-top: 8px;
+      background: rgba(244,196,48,.12);
+      border-left: 3px solid var(--yellow);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: .72rem;
+      color: var(--yellow);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     /* ─── MAP ─── */
     #radar-map {
       width: 100%;
@@ -214,18 +228,32 @@
       grid-template-columns: repeat(3, 1fr);
       gap: 8px;
     }
-    .spc-item { text-align: center; }
-    .spc-item img {
-      width: 100%;
-      border-radius: 4px;
-      display: block;
+    .spc-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: rgba(0,0,0,.25);
+      border-radius: 5px;
+      padding: 14px 6px;
+      text-decoration: none;
+      color: var(--text);
+      transition: background .15s;
     }
-    .spc-item .spc-label {
-      font-size: .65rem;
+    .spc-btn:hover { background: rgba(0,0,0,.4); }
+    .spc-btn .spc-icon { font-size: 1.3rem; }
+    .spc-btn .spc-label {
+      font-family: var(--head);
+      font-size: .78rem;
+      font-weight: 600;
+      letter-spacing: .05em;
+    }
+    .spc-btn .spc-sub {
+      font-size: .6rem;
       color: var(--text-dim);
       text-transform: uppercase;
-      letter-spacing: .07em;
-      margin-top: 4px;
+      letter-spacing: .06em;
     }
 
     /* ─── NDFD 12-HOUR ─── */
@@ -524,20 +552,22 @@ const CFG = {
   nwsAlerts: 'https://api.weather.gov/alerts/active?point=26.3789,-80.1081',
   // METAR station fallback order
   stations: ['KBCT','KPMP','KFXE','KPBI','KFLL'],
-  // NWS radar base WMS
+  // NWS radar base WMS — layer 0 = "Weather Radar Base Reflectivity Mosaic"
+  // (layer 1 is just the Boundary footprint — NOT the radar image. This was the bug.)
   nexradWms: 'https://nowcoast.noaa.gov/arcgis/services/nowcoast/radar_meteo_imagery_nexrad_time/MapServer/WmsServer',
-  // GLM density WMS
+  // GLM strike-density WMS — layer 0 confirmed correct (this is NOAA/OPC's *emulated*
+  // strike-density product, not raw GOES GLM detections — fine for a visual overlay)
   glmWms: 'https://nowcoast.noaa.gov/arcgis/services/nowcoast/sat_meteo_emulated_imagery_lightningstrikedensity_goes_time/MapServer/WmsServer',
   // Refresh intervals
   condRefresh: 120_000,   // 2 min
   lgxRefresh:   60_000,   // 1 min
 };
 
-// SPC outlook URLs (date-independent static redirects)
-const SPC_IMGS = [
-  { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.gif',  label: 'Day 1' },
-  { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.gif',  label: 'Day 2' },
-  { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.gif',  label: 'Day 3' },
+// SPC outlook links (hotlinking their .gif is blocked server-side — use buttons instead)
+const SPC_LINKS = [
+  { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.html', label: 'Day 1', icon: '1️⃣' },
+  { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.html', label: 'Day 2', icon: '2️⃣' },
+  { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.html', label: 'Day 3', icon: '3️⃣' },
 ];
 
 // NWS alert event → color
@@ -569,14 +599,9 @@ function cToF(c) {
   return Math.round(c * 9/5 + 32) + '°F';
 }
 
-function msToKt(ms) {
-  if (ms === null || ms === undefined || isNaN(ms)) return '—';
-  return Math.round(ms * 1.94384) + ' kt';
-}
-
-function kmhToKt(kmh) {
+function kmhToMph(kmh) {
   if (kmh === null || kmh === undefined || isNaN(kmh)) return '—';
-  return Math.round(kmh / 1.852) + ' kt';
+  return Math.round(kmh / 1.609) + ' mph';
 }
 
 function paToInHg(pa) {
@@ -599,6 +624,13 @@ function degToCard(deg) {
 function mToFt(m) {
   if (m === null || m === undefined || isNaN(m)) return null;
   return Math.round(m * 3.28084);
+}
+
+// Round to nearest 100ft and format in thousands, e.g. 2986 -> "3.0k'", 550 -> "0.6k'"
+function ftToThousands(ft) {
+  if (ft === null || ft === undefined || isNaN(ft)) return null;
+  const rounded = Math.round(ft / 100) * 100;
+  return (rounded / 1000).toFixed(1) + "k'";
 }
 
 function relTime(isoStr) {
@@ -653,6 +685,15 @@ function getAlertStyle(eventName) {
     if (key.includes(k)) return v;
   }
   return { bg:'#2c3e50', text:'#eee' };
+}
+
+// Pull an LTG remark out of the METAR RMK section, if present.
+// Handles common forms like "LTG DSNT NE", "LTG DSNT ALQDS", "OCNL LTGICCG OHD"
+function parseLtgRemark(raw) {
+  if (!raw) return null;
+  const match = raw.match(/(?:[A-Z]*\s)?LTG[A-Z]*\s[A-Z0-9\s]*?(?=\s(?:SLP\d{2,3}|T\d{8}|RMK|$))/);
+  if (!match) return null;
+  return match[0].trim();
 }
 
 // ─── TIMESTAMPS & DOTS ─────────────────────────────────────────────
@@ -717,7 +758,8 @@ async function fetchLightning() {
 
     const f8  = data.flashes_8mi  ?? 0;
     const f15 = data.flashes_15mi ?? 0;
-    const closest = data.closest_flash_mi;
+    // FIX: schema key is "closest_mi", not "closest_flash_mi" — was always undefined before
+    const closest = data.closest_mi;
 
     // Traffic light
     let iconStr, labelStr, color, subStr;
@@ -745,9 +787,9 @@ async function fetchLightning() {
 
     el('lgx-8mi').textContent    = f8.toString();
     el('lgx-15mi').textContent   = f15.toString();
-    el('lgx-closest').textContent = closest !== null && closest !== undefined
+    el('lgx-closest').textContent = (closest !== null && closest !== undefined)
                                     ? closest.toFixed(1) + ' mi'
-                                    : 'None';
+                                    : ((f8 + f15) > 0 ? 'Pending' : 'None');
     el('lgx-updated').textContent = data.updated
                                     ? relTime(data.updated)
                                     : '—';
@@ -805,13 +847,14 @@ async function fetchConditions() {
 
   const fc = flightCategory(layers, vis);
 
-  // Build sky string
+  // Build sky string — cloud base rounded to thousands format
   let skyStr = '—';
   if (Array.isArray(layers) && layers.length > 0) {
     skyStr = layers.map(l => {
       const base = l.base?.value;
       const ft   = base !== null ? mToFt(base) : null;
-      return `${l.amount}${ft !== null ? ' ' + ft.toLocaleString() + '\'' : ''}`;
+      const disp = ft !== null ? ftToThousands(ft) : '';
+      return `${l.amount}${disp ? ' ' + disp : ''}`;
     }).join(' ');
   } else if (layers && layers.length === 0) {
     skyStr = 'CLR';
@@ -820,14 +863,21 @@ async function fetchConditions() {
   // Altimeter: prefer seaLevelPressure
   const altStr = paToInHg(sealvl || baro);
 
-  // Wind string
+  // Wind string — mph, with VRB handling
   let windStr = '—';
   if (wdirDeg !== null && wdirDeg !== undefined) {
-    windStr = `${degToCard(wdirDeg)} ${String(wdirDeg).padStart(3,'0')}° @ ${kmhToKt(wspd)}`;
-    if (wgust) windStr += ` G ${kmhToKt(wgust)}`;
+    windStr = `${degToCard(wdirDeg)} ${String(wdirDeg).padStart(3,'0')}° @ ${kmhToMph(wspd)}`;
+    if (wgust) windStr += ` G ${kmhToMph(wgust)}`;
   } else if (wspd === 0) {
     windStr = 'CALM';
+  } else if (wspd) {
+    // Variable direction (VRB in raw METAR) — API gives null direction but nonzero speed
+    windStr = `VRB @ ${kmhToMph(wspd)}`;
+    if (wgust) windStr += ` G ${kmhToMph(wgust)}`;
   }
+
+  // LTG remark callout
+  const ltg = parseLtgRemark(raw);
 
   body.innerHTML = `
     <div class="cond-grid">
@@ -864,6 +914,7 @@ async function fetchConditions() {
         <div class="lbl">Conditions</div>
       </div>
     </div>
+    ${ltg ? `<div class="ltg-callout">⚡ ${ltg}</div>` : ''}
     ${raw ? `<div style="font-size:.62rem;color:var(--text-dim);margin-top:8px;word-break:break-all">
       ${raw}
     </div>` : ''}
@@ -894,22 +945,22 @@ function initMap() {
     subdomains: 'abcd',
   }).addTo(map);
 
-  // NEXRAD composite reflectivity
+  // NEXRAD composite reflectivity — layer 0, NOT 1 (1 is just the boundary outline)
   L.tileLayer.wms(CFG.nexradWms, {
-    layers: '1',
+    layers: '0',
     format: 'image/png',
     transparent: true,
     opacity: 0.75,
     attribution: 'NOAA/NWS NEXRAD',
   }).addTo(map);
 
-  // GLM lightning density
+  // GLM lightning strike density
   L.tileLayer.wms(CFG.glmWms, {
     layers: '0',
     format: 'image/png',
     transparent: true,
     opacity: 0.65,
-    attribution: 'NOAA GOES GLM',
+    attribution: 'NOAA/OPC Emulated GLM',
   }).addTo(map);
 
   // 8-mile ring (yellow dashed)
@@ -951,14 +1002,12 @@ function initMap() {
 function renderSpc() {
   const grid = el('spc-grid');
   if (!grid) return;
-  grid.innerHTML = SPC_IMGS.map(({ url, label }) =>
-    `<div class="spc-item">
-       <a href="https://www.spc.noaa.gov/products/outlook/" target="_blank" rel="noopener">
-         <img src="${url}?_=${Date.now()}" alt="${label} SPC Outlook" loading="lazy"
-              onerror="this.parentElement.parentElement.innerHTML='<div class=\\"err\\" style=\\"font-size:.7rem\\">${label} unavail.</div>'">
-       </a>
-       <div class="spc-label">${label}</div>
-     </div>`
+  grid.innerHTML = SPC_LINKS.map(({ url, label, icon }) =>
+    `<a class="spc-btn" href="${url}" target="_blank" rel="noopener">
+       <span class="spc-icon">${icon}</span>
+       <span class="spc-label">${label}</span>
+       <span class="spc-sub">Outlook →</span>
+     </a>`
   ).join('');
 }
 
