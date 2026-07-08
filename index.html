@@ -222,38 +222,49 @@
     .map-legend span { display: flex; align-items: center; gap: 5px; }
     .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
-    /* ─── SPC ─── */
+    /* ─── SPC THUMBNAILS ─── */
     .spc-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 8px;
     }
-    .spc-btn {
+    .spc-thumb {
       display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-decoration: none;
+      color: var(--text);
+      background: rgba(0,0,0,.25);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .spc-thumb:hover { background: rgba(0,0,0,.4); }
+    .spc-thumb-img {
+      width: 100%;
+      display: block;
+    }
+    .spc-thumb-fallback {
+      display: none;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       gap: 4px;
-      background: rgba(0,0,0,.25);
-      border-radius: 5px;
-      padding: 14px 6px;
-      text-decoration: none;
-      color: var(--text);
-      transition: background .15s;
+      padding: 18px 6px;
+      width: 100%;
     }
-    .spc-btn:hover { background: rgba(0,0,0,.4); }
-    .spc-btn .spc-icon { font-size: 1.3rem; }
-    .spc-btn .spc-label {
-      font-family: var(--head);
-      font-size: .78rem;
-      font-weight: 600;
-      letter-spacing: .05em;
-    }
-    .spc-btn .spc-sub {
+    .spc-thumb-fallback .spc-icon { font-size: 1.3rem; }
+    .spc-thumb-fallback .spc-sub {
       font-size: .6rem;
       color: var(--text-dim);
       text-transform: uppercase;
       letter-spacing: .06em;
+    }
+    .spc-thumb .spc-label {
+      font-family: var(--head);
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .05em;
+      padding: 4px 0 6px;
     }
 
     /* ─── NDFD 12-HOUR ─── */
@@ -284,30 +295,43 @@
     .ndfd-table tr:nth-child(odd) td { background: rgba(0,0,0,.15); }
 
     /* ─── 5-DAY FORECAST ─── */
-    .forecast-list { list-style: none; }
-    .forecast-day {
+    .forecast-issued {
+      font-size: .68rem;
+      color: var(--text-dim);
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+    }
+    .forecast-day-card {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+    .forecast-day-card:last-child { border-bottom: none; }
+    .forecast-day-card .day-header {
       display: flex;
       align-items: baseline;
       gap: 10px;
-      padding: 6px 0;
-      border-bottom: 1px solid rgba(255,255,255,.05);
-      font-size: .78rem;
+      margin-bottom: 4px;
     }
-    .forecast-day:last-child { border-bottom: none; }
-    .forecast-day .day-name {
+    .forecast-day-card .day-name {
       font-family: var(--head);
-      font-size: .85rem;
+      font-size: .95rem;
       font-weight: 600;
-      min-width: 48px;
     }
-    .forecast-day .day-temp {
+    .forecast-day-card .day-temp {
       font-weight: 600;
-      min-width: 52px;
+      font-size: .9rem;
     }
-    .forecast-day .day-desc {
+    .forecast-day-card .day-short {
+      font-size: .82rem;
+      font-weight: 600;
       color: var(--text-dim);
-      flex: 1;
-      font-size: .73rem;
+      margin-bottom: 4px;
+    }
+    .forecast-day-card .day-detail {
+      font-size: .82rem;
+      line-height: 1.55;
+      color: var(--text);
     }
 
     /* ─── FOOTER ─── */
@@ -484,7 +508,7 @@
      6 ▸ SPC OUTLOOKS
 ══════════════════════════════════════════════════ -->
 <div class="section" id="sec-spc">
-  <div class="section-title">🌪 SPC Convective Outlooks</div>
+  <div class="section-title">🌪 SPC Convective Outlooks — Florida</div>
   <div class="section-body">
     <div class="spc-grid" id="spc-grid"></div>
   </div>
@@ -563,11 +587,12 @@ const CFG = {
   lgxRefresh:   60_000,   // 1 min
 };
 
-// SPC outlook links (hotlinking their .gif is blocked server-side — use buttons instead)
-const SPC_LINKS = [
-  { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.html', label: 'Day 1', icon: '1️⃣' },
-  { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.html', label: 'Day 2', icon: '2️⃣' },
-  { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.html', label: 'Day 3', icon: '3️⃣' },
+// SPC state-partner outlook thumbnails (built for embedding — different path than the
+// hotlink-blocked /products/outlook/ page). Falls back to a text link if ever blocked.
+const SPC_IMGS = [
+  { day: 1, img: 'https://www.spc.noaa.gov/partners/outlooks/state/images/FL_swody1.png', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.html' },
+  { day: 2, img: 'https://www.spc.noaa.gov/partners/outlooks/state/images/FL_swody2.png', url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.html' },
+  { day: 3, img: 'https://www.spc.noaa.gov/partners/outlooks/state/images/FL_swody3.png', url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.html' },
 ];
 
 // NWS alert event → color
@@ -626,11 +651,10 @@ function mToFt(m) {
   return Math.round(m * 3.28084);
 }
 
-// Round to nearest 100ft and format in thousands, e.g. 2986 -> "3.0k'", 550 -> "0.6k'"
-function ftToThousands(ft) {
+// Round to nearest 100ft, full value — e.g. 2986 -> 2300... wait, 2986 -> 3000. See below.
+function roundCeilingFt(ft) {
   if (ft === null || ft === undefined || isNaN(ft)) return null;
-  const rounded = Math.round(ft / 100) * 100;
-  return (rounded / 1000).toFixed(1) + "k'";
+  return Math.round(ft / 100) * 100;
 }
 
 function relTime(isoStr) {
@@ -758,7 +782,6 @@ async function fetchLightning() {
 
     const f8  = data.flashes_8mi  ?? 0;
     const f15 = data.flashes_15mi ?? 0;
-    // FIX: schema key is "closest_mi", not "closest_flash_mi" — was always undefined before
     const closest = data.closest_mi;
 
     // Traffic light
@@ -847,14 +870,14 @@ async function fetchConditions() {
 
   const fc = flightCategory(layers, vis);
 
-  // Build sky string — cloud base rounded to thousands format
+  // Build sky string — full rounded value, e.g. "FEW 2300 SCT 300"
   let skyStr = '—';
   if (Array.isArray(layers) && layers.length > 0) {
     skyStr = layers.map(l => {
       const base = l.base?.value;
       const ft   = base !== null ? mToFt(base) : null;
-      const disp = ft !== null ? ftToThousands(ft) : '';
-      return `${l.amount}${disp ? ' ' + disp : ''}`;
+      const disp = ft !== null ? roundCeilingFt(ft) : null;
+      return `${l.amount}${disp !== null ? ' ' + disp : ''}`;
     }).join(' ');
   } else if (layers && layers.length === 0) {
     skyStr = 'CLR';
@@ -1002,12 +1025,16 @@ function initMap() {
 function renderSpc() {
   const grid = el('spc-grid');
   if (!grid) return;
-  grid.innerHTML = SPC_LINKS.map(({ url, label, icon }) =>
-    `<a class="spc-btn" href="${url}" target="_blank" rel="noopener">
-       <span class="spc-icon">${icon}</span>
-       <span class="spc-label">${label}</span>
-       <span class="spc-sub">Outlook →</span>
-     </a>`
+  grid.innerHTML = SPC_IMGS.map(({ day, img, url }) => `
+    <a class="spc-thumb" href="${url}" target="_blank" rel="noopener">
+      <img class="spc-thumb-img" src="${img}?_=${Date.now()}" alt="Day ${day} FL Outlook" loading="lazy"
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+      <div class="spc-thumb-fallback">
+        <span class="spc-icon">🌪</span>
+        <span class="spc-sub">Outlook →</span>
+      </div>
+      <span class="spc-label">Day ${day}</span>
+    </a>`
   ).join('');
 }
 
@@ -1034,138 +1061,3 @@ async function fetchHourly() {
     const urls = await getGridpoints();
     if (!urls?.hourly) throw new Error('No hourly URL');
     const res  = await fetch(urls.hourly);
-    const data = await res.json();
-    const periods = (data.properties.periods || []).slice(0, 12);
-    if (!periods.length) throw new Error('No data');
-
-    const rows = periods.map(p => {
-      const t = new Date(p.startTime);
-      const hr = t.toLocaleTimeString('en-US', {hour:'numeric', hour12:true, timeZone:'America/New_York'});
-      const temp = `${p.temperature}°${p.temperatureUnit}`;
-      const wind = p.windSpeed ? `${p.windDirection} ${p.windSpeed}` : '—';
-      const pop  = p.probabilityOfPrecipitation?.value ?? '—';
-      const desc = p.shortForecast.replace(/Chance of |Slight Chance of /i,'');
-      return `<tr>
-        <td>${hr}</td>
-        <td>${temp}</td>
-        <td style="font-size:.65rem">${wind}</td>
-        <td>${pop !== '—' ? pop + '%' : '—'}</td>
-        <td style="font-size:.67rem;text-align:left;max-width:100px">${desc}</td>
-      </tr>`;
-    }).join('');
-
-    body.innerHTML = `
-      <div class="ndfd-scroll">
-        <table class="ndfd-table">
-          <tr>
-            <th>Time</th><th>Temp</th><th>Wind</th><th>PoP</th><th style="text-align:left">Sky</th>
-          </tr>
-          ${rows}
-        </table>
-      </div>`;
-  } catch(e) {
-    body.innerHTML = `<div class="err">⚠ Hourly forecast unavailable</div>`;
-  }
-}
-
-async function fetchFiveDay() {
-  const body = el('fiveday-body');
-  try {
-    const urls = await getGridpoints();
-    if (!urls?.forecast) throw new Error('No forecast URL');
-    const res  = await fetch(urls.forecast);
-    const data = await res.json();
-    const periods = (data.properties.periods || []).slice(0, 10);
-
-    const items = periods.map(p => {
-      const hiLo = `${p.temperature}°${p.temperatureUnit}`;
-      const name  = p.name.length > 12 ? p.name.substring(0,12) + '…' : p.name;
-      return `<li class="forecast-day">
-        <span class="day-name">${name}</span>
-        <span class="day-temp">${hiLo}</span>
-        <span class="day-desc">${p.shortForecast}</span>
-      </li>`;
-    }).join('');
-
-    body.innerHTML = `<ul class="forecast-list">${items}</ul>`;
-  } catch(e) {
-    body.innerHTML = `<div class="err">⚠ 5-day forecast unavailable</div>`;
-  }
-}
-
-// ─── 8 ▸ BLUESKY ──────────────────────────────────────────────────
-
-async function fetchBluesky() {
-  const content = el('bsky-content');
-  try {
-    const url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${CFG.blueskyHandle}&limit=1`;
-    const res  = await fetch(url);
-    const data = await res.json();
-    const post = data.feed?.[0]?.post;
-    if (!post) throw new Error('No posts');
-
-    const text     = post.record?.text || '';
-    const created  = post.record?.createdAt || post.indexedAt;
-    const uri      = post.uri || '';
-    const rkey     = uri.split('/').pop();
-    const postUrl  = `https://bsky.app/profile/${CFG.blueskyHandle}/post/${rkey}`;
-
-    content.innerHTML = `
-      <div class="bsky-text">${escHtml(text)}</div>
-      <div class="bsky-time">${created ? relTime(created) : ''}</div>
-      <a href="${postUrl}" class="bsky-link" target="_blank" rel="noopener">View on Bluesky →</a>`;
-  } catch(e) {
-    content.innerHTML = `<span class="err" style="font-size:.75rem">Could not load latest post</span>`;
-  }
-}
-
-function escHtml(str) {
-  return str
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/\n/g,'<br>');
-}
-
-// ─── ORCHESTRATION ────────────────────────────────────────────────
-
-async function refreshConditions() {
-  await Promise.all([
-    fetchAlerts(),
-    fetchConditions(),
-    fetchHourly(),
-    fetchFiveDay(),
-  ]);
-}
-
-async function refreshLightning() {
-  await fetchLightning();
-}
-
-async function init() {
-  // Kick everything off in parallel
-  refreshConditions();
-  refreshLightning();
-  fetchBluesky();
-  renderSpc();
-
-  // Init map after a tiny delay to let DOM settle
-  setTimeout(initMap, 50);
-
-  // Auto-refresh timers
-  setInterval(refreshConditions, CFG.condRefresh);
-  setInterval(refreshLightning,  CFG.lgxRefresh);
-  // Bluesky: every 10 min
-  setInterval(fetchBluesky, 600_000);
-}
-
-// Register service worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
-}
-
-// Go
-document.addEventListener('DOMContentLoaded', init);
-</script>
-</body>
-</html>
