@@ -1061,3 +1061,145 @@ async function fetchHourly() {
     const urls = await getGridpoints();
     if (!urls?.hourly) throw new Error('No hourly URL');
     const res  = await fetch(urls.hourly);
+    const data = await res.json();
+    const periods = (data.properties.periods || []).slice(0, 12);
+    if (!periods.length) throw new Error('No data');
+
+    const rows = periods.map(p => {
+      const t = new Date(p.startTime);
+      const hr = t.toLocaleTimeString('en-US', {hour:'numeric', hour12:true, timeZone:'America/New_York'});
+      const temp = `${p.temperature}°${p.temperatureUnit}`;
+      const wind = p.windSpeed ? `${p.windDirection} ${p.windSpeed}` : '—';
+      const pop  = p.probabilityOfPrecipitation?.value ?? '—';
+      const desc = p.shortForecast.replace(/Chance of |Slight Chance of /i,'');
+      return `<tr>
+        <td>${hr}</td>
+        <td>${temp}</td>
+        <td style="font-size:.65rem">${wind}</td>
+        <td>${pop !== '—' ? pop + '%' : '—'}</td>
+        <td style="font-size:.67rem;text-align:left;max-width:100px">${desc}</td>
+      </tr>`;
+    }).join('');
+
+    body.innerHTML = `
+      <div class="ndfd-scroll">
+        <table class="ndfd-table">
+          <tr>
+            <th>Time</th><th>Temp</th><th>Wind</th><th>PoP</th><th style="text-align:left">Sky</th>
+          </tr>
+          ${rows}
+        </table>
+      </div>`;
+  } catch(e) {
+    body.innerHTML = `<div class="err">⚠ Hourly forecast unavailable</div>`;
+  }
+}
+
+async function fetchFiveDay() {
+  const body = el('fiveday-body');
+  try {
+    const urls = await getGridpoints();
+    if (!urls?.forecast) throw new Error('No forecast URL');
+    const res  = await fetch(urls.forecast);
+    const data = await res.json();
+    const periods = (data.properties.periods || []).slice(0, 10);
+    const issuedIso = data.properties.updated;
+
+    const issued = issuedIso
+      ? `<div class="forecast-issued">Forecast Issued: ${shortDate(issuedIso)} at ${shortTime(issuedIso)}</div>`
+      : '';
+
+    const items = periods.map(p => {
+      const hiLo = `${p.temperature}°${p.temperatureUnit}`;
+      return `<div class="forecast-day-card">
+        <div class="day-header">
+          <span class="day-name">${p.name}</span>
+          <span class="day-temp">${hiLo}</span>
+        </div>
+        <div class="day-short">${p.shortForecast}</div>
+        <div class="day-detail">${p.detailedForecast}</div>
+      </div>`;
+    }).join('');
+
+    body.innerHTML = `${issued}${items}`;
+  } catch(e) {
+    body.innerHTML = `<div class="err">⚠ 5-day forecast unavailable</div>`;
+  }
+}
+
+// ─── 8 ▸ BLUESKY ──────────────────────────────────────────────────
+
+async function fetchBluesky() {
+  const content = el('bsky-content');
+  try {
+    const url = `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${CFG.blueskyHandle}&limit=1`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    const post = data.feed?.[0]?.post;
+    if (!post) throw new Error('No posts');
+
+    const text     = post.record?.text || '';
+    const created  = post.record?.createdAt || post.indexedAt;
+    const uri      = post.uri || '';
+    const rkey     = uri.split('/').pop();
+    const postUrl  = `https://bsky.app/profile/${CFG.blueskyHandle}/post/${rkey}`;
+
+    content.innerHTML = `
+      <div class="bsky-text">${escHtml(text)}</div>
+      <div class="bsky-time">${created ? relTime(created) : ''}</div>
+      <a href="${postUrl}" class="bsky-link" target="_blank" rel="noopener">View on Bluesky →</a>`;
+  } catch(e) {
+    content.innerHTML = `<span class="err" style="font-size:.75rem">Could not load latest post</span>`;
+  }
+}
+
+function escHtml(str) {
+  return str
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\n/g,'<br>');
+}
+
+// ─── ORCHESTRATION ────────────────────────────────────────────────
+
+async function refreshConditions() {
+  await Promise.all([
+    fetchAlerts(),
+    fetchConditions(),
+    fetchHourly(),
+    fetchFiveDay(),
+  ]);
+}
+
+async function refreshLightning() {
+  await fetchLightning();
+}
+
+async function init() {
+  // Kick everything off in parallel
+  refreshConditions();
+  refreshLightning();
+  fetchBluesky();
+  renderSpc();
+
+  // Init map after a tiny delay to let DOM settle
+  setTimeout(initMap, 50);
+
+  // Auto-refresh timers
+  setInterval(refreshConditions, CFG.condRefresh);
+  setInterval(refreshLightning,  CFG.lgxRefresh);
+  // Bluesky: every 10 min
+  setInterval(fetchBluesky, 600_000);
+}
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+// Go
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
