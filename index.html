@@ -577,7 +577,7 @@ const CFG = {
   // METAR station fallback order
   stations: ['KBCT','KPMP','KFXE','KPBI','KFLL'],
   // NWS radar base WMS — layer 0 = "Weather Radar Base Reflectivity Mosaic"
-  // (layer 1 is just the Boundary footprint — NOT the radar image. This was the bug.)
+  // (layer 1 is just the Boundary footprint — NOT the radar image. This was the first bug.)
   nexradWms: 'https://nowcoast.noaa.gov/arcgis/services/nowcoast/radar_meteo_imagery_nexrad_time/MapServer/WmsServer',
   // GLM strike-density WMS — layer 0 confirmed correct (this is NOAA/OPC's *emulated*
   // strike-density product, not raw GOES GLM detections — fine for a visual overlay)
@@ -585,6 +585,7 @@ const CFG = {
   // Refresh intervals
   condRefresh: 120_000,   // 2 min
   lgxRefresh:   60_000,   // 1 min
+  wmsTimeRefresh: 120_000, // 2 min — keep WMS TIME window current
 };
 
 // SPC state-partner outlook thumbnails (built for embedding — different path than the
@@ -651,7 +652,7 @@ function mToFt(m) {
   return Math.round(m * 3.28084);
 }
 
-// Round to nearest 100ft, full value — e.g. 2986 -> 2300... wait, 2986 -> 3000. See below.
+// Round to nearest 100ft, full value — e.g. 2986 -> 3000
 function roundCeilingFt(ft) {
   if (ft === null || ft === undefined || isNaN(ft)) return null;
   return Math.round(ft / 100) * 100;
@@ -712,7 +713,6 @@ function getAlertStyle(eventName) {
 }
 
 // Pull an LTG remark out of the METAR RMK section, if present.
-// Handles common forms like "LTG DSNT NE", "LTG DSNT ALQDS", "OCNL LTGICCG OHD"
 function parseLtgRemark(raw) {
   if (!raw) return null;
   const match = raw.match(/(?:[A-Z]*\s)?LTG[A-Z]*\s[A-Z0-9\s]*?(?=\s(?:SLP\d{2,3}|T\d{8}|RMK|$))/);
@@ -737,7 +737,6 @@ async function fetchAlerts() {
     const res  = await fetch(CFG.nwsAlerts);
     const data = await res.json();
     const features = (data.features || []).filter(f => {
-      // only current, non-expired
       const exp = f.properties?.expires;
       return !exp || new Date(exp) > new Date();
     });
@@ -784,7 +783,6 @@ async function fetchLightning() {
     const f15 = data.flashes_15mi ?? 0;
     const closest = data.closest_mi;
 
-    // Traffic light
     let iconStr, labelStr, color, subStr;
     if (f8 > 0) {
       iconStr  = '🔴';
@@ -857,7 +855,6 @@ async function fetchConditions() {
   const temp   = obs.temperature?.value;
   const dew    = obs.dewpoint?.value;
   const wdirDeg = obs.windDirection?.value;
-  // NWS windSpeed is in km/h
   const wspd   = obs.windSpeed?.value;
   const wgust  = obs.windGust?.value;
   const baro   = obs.barometricPressure?.value;
@@ -870,7 +867,6 @@ async function fetchConditions() {
 
   const fc = flightCategory(layers, vis);
 
-  // Build sky string — full rounded value, e.g. "FEW 2300 SCT 300"
   let skyStr = '—';
   if (Array.isArray(layers) && layers.length > 0) {
     skyStr = layers.map(l => {
@@ -883,10 +879,8 @@ async function fetchConditions() {
     skyStr = 'CLR';
   }
 
-  // Altimeter: prefer seaLevelPressure
   const altStr = paToInHg(sealvl || baro);
 
-  // Wind string — mph, with VRB handling
   let windStr = '—';
   if (wdirDeg !== null && wdirDeg !== undefined) {
     windStr = `${degToCard(wdirDeg)} ${String(wdirDeg).padStart(3,'0')}° @ ${kmhToMph(wspd)}`;
@@ -894,12 +888,10 @@ async function fetchConditions() {
   } else if (wspd === 0) {
     windStr = 'CALM';
   } else if (wspd) {
-    // Variable direction (VRB in raw METAR) — API gives null direction but nonzero speed
     windStr = `VRB @ ${kmhToMph(wspd)}`;
     if (wgust) windStr += ` G ${kmhToMph(wgust)}`;
   }
 
-  // LTG remark callout
   const ltg = parseLtgRemark(raw);
 
   body.innerHTML = `
@@ -951,6 +943,23 @@ async function fetchConditions() {
 // ─── 5 ▸ MAP ──────────────────────────────────────────────────────
 
 let map = null;
+let nexradLayer = null;
+let glmLayer = null;
+
+// nowCOAST time-enabled WMS layers need an explicit TIME range, or they silently
+// return nothing when the exact "present moment" has no available imagery yet
+// (which is most of the time, due to normal processing/upload lag).
+function wmsTimeRange() {
+  const now = new Date();
+  const past = new Date(now.getTime() - 30 * 60 * 1000); // 30 min window
+  return `${past.toISOString()}/${now.toISOString()}`;
+}
+
+function refreshWmsTime() {
+  const range = wmsTimeRange();
+  if (nexradLayer) nexradLayer.setParams({ TIME: range }, false);
+  if (glmLayer)    glmLayer.setParams({ TIME: range }, false);
+}
 
 function initMap() {
   if (map) return;
@@ -968,27 +977,29 @@ function initMap() {
     subdomains: 'abcd',
   }).addTo(map);
 
-  // NEXRAD composite reflectivity — layer 0, NOT 1 (1 is just the boundary outline)
-  L.tileLayer.wms(CFG.nexradWms, {
+  // NEXRAD composite reflectivity — layer 0, with explicit TIME range
+  nexradLayer = L.tileLayer.wms(CFG.nexradWms, {
     layers: '0',
     format: 'image/png',
     transparent: true,
     opacity: 0.75,
     attribution: 'NOAA/NWS NEXRAD',
+    TIME: wmsTimeRange(),
   }).addTo(map);
 
-  // GLM lightning strike density
-  L.tileLayer.wms(CFG.glmWms, {
+  // GLM lightning strike density — layer 0, with explicit TIME range
+  glmLayer = L.tileLayer.wms(CFG.glmWms, {
     layers: '0',
     format: 'image/png',
     transparent: true,
     opacity: 0.65,
     attribution: 'NOAA/OPC Emulated GLM',
+    TIME: wmsTimeRange(),
   }).addTo(map);
 
   // 8-mile ring (yellow dashed)
   L.circle([CFG.lat, CFG.lon], {
-    radius: 12875,  // ~8 mi in meters
+    radius: 12875,
     color: '#f4c430',
     weight: 2,
     dashArray: '6 4',
@@ -999,7 +1010,7 @@ function initMap() {
 
   // 15-mile ring (red dashed)
   L.circle([CFG.lat, CFG.lon], {
-    radius: 24140,  // ~15 mi in meters
+    radius: 24140,
     color: '#e63946',
     weight: 2,
     dashArray: '10 5',
@@ -1040,7 +1051,7 @@ function renderSpc() {
 
 // ─── 7 ▸ FORECAST ─────────────────────────────────────────────────
 
-let forecastUrls = null;  // { hourly, forecast }
+let forecastUrls = null;
 
 async function getGridpoints() {
   if (forecastUrls) return forecastUrls;
@@ -1175,30 +1186,25 @@ async function refreshLightning() {
 }
 
 async function init() {
-  // Kick everything off in parallel
   refreshConditions();
   refreshLightning();
   fetchBluesky();
   renderSpc();
 
-  // Init map after a tiny delay to let DOM settle
   setTimeout(initMap, 50);
 
-  // Auto-refresh timers
   setInterval(refreshConditions, CFG.condRefresh);
   setInterval(refreshLightning,  CFG.lgxRefresh);
-  // Bluesky: every 10 min
+  setInterval(refreshWmsTime,    CFG.wmsTimeRefresh);
   setInterval(fetchBluesky, 600_000);
 }
 
-// Register service worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
 
-// Go
 document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
