@@ -205,10 +205,10 @@
       gap: 6px;
     }
 
-    /* ─── MAP ─── */
-    #radar-map {
+    /* ─── MAPS ─── */
+    .map-container {
       width: 100%;
-      height: 340px;
+      height: 280px;
       border-radius: 0;
     }
     .map-legend {
@@ -490,16 +490,29 @@
 
 
 <!-- ══════════════════════════════════════════════
-     5 ▸ RADAR + LIGHTNING MAP
+     5A ▸ RADAR MAP
 ══════════════════════════════════════════════════ -->
 <div class="section" id="sec-radar">
-  <div class="section-title">📡 Radar &amp; Lightning Map</div>
-  <div id="radar-map"></div>
+  <div class="section-title">📡 NEXRAD Radar</div>
+  <div id="radar-map" class="map-container"></div>
   <div class="map-legend">
     <span><span class="dot" style="background:#f4c430;"></span>8 mi ring</span>
     <span><span class="dot" style="background:#e63946;"></span>15 mi ring</span>
     <span><span class="dot" style="background:#0af;"></span>NEXRAD radar</span>
-    <span><span class="dot" style="background:#ff0;"></span>GLM lightning</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════
+     5B ▸ LIGHTNING MAP
+══════════════════════════════════════════════════ -->
+<div class="section" id="sec-lightning-map">
+  <div class="section-title">⚡ Lightning Strike Density</div>
+  <div id="lightning-map" class="map-container"></div>
+  <div class="map-legend">
+    <span><span class="dot" style="background:#f4c430;"></span>8 mi ring</span>
+    <span><span class="dot" style="background:#e63946;"></span>15 mi ring</span>
+    <span><span class="dot" style="background:#ff0;"></span>Lightning density</span>
   </div>
 </div>
 
@@ -576,12 +589,10 @@ const CFG = {
   nwsAlerts: 'https://api.weather.gov/alerts/active?point=26.3789,-80.1081',
   // METAR station fallback order
   stations: ['KBCT','KPMP','KFXE','KPBI','KFLL'],
-  // nowCOAST's old /arcgis/services/... path was retired 4/19/2023 (returns 403 —
-  // "no longer accepts requests to arcgis"). This was the real root cause of the
-  // radar/lightning map never rendering, confirmed via curl 2026-07-10. New
-  // GeoServer-based endpoints below, confirmed returning real 200 + PNG data:
+  // nowCOAST's old /arcgis/services/... path was retired 4/19/2023 (returns 403).
+  // New GeoServer-based endpoints, confirmed returning real 200 + PNG data:
   nexradWms: 'https://nowcoast.noaa.gov/geoserver/observations/weather_radar/ows',
-  // Now real ground-based lightning detection (NLDN + GLD360), not the old
+  // Real ground-based lightning detection (NLDN + GLD360), not the old
   // 2015-era "emulated GLM" placeholder product.
   glmWms: 'https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows',
   // Refresh intervals
@@ -683,7 +694,6 @@ function nowStr() {
 }
 
 function flightCategory(cloudLayers, visMeters) {
-  // Find ceiling = lowest BKN or OVC layer
   let ceilingFt = Infinity;
   if (Array.isArray(cloudLayers)) {
     for (const layer of cloudLayers) {
@@ -941,51 +951,12 @@ async function fetchConditions() {
   setTimestamp('conditions', 'Conditions', true);
 }
 
-// ─── 5 ▸ MAP ──────────────────────────────────────────────────────
+// ─── 5 ▸ MAPS (two separate: radar + lightning) ────────────────────
 
-let map = null;
-let nexradLayer = null;
-let glmLayer = null;
+let radarMap = null;
+let lightningMap = null;
 
-function initMap() {
-  if (map) return;
-  map = L.map('radar-map', {
-    center: [CFG.lat, CFG.lon],
-    zoom: 9,
-    zoomControl: true,
-    attributionControl: true,
-  });
-
-  // Dark base tile
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '© <a href="https://openstreetmap.org">OSM</a> © <a href="https://carto.com">CARTO</a>',
-    maxZoom: 15,
-    subdomains: 'abcd',
-  }).addTo(map);
-
-  // NEXRAD composite reflectivity — new GeoServer endpoint (old ArcGIS path retired
-  // 4/19/2023, was returning 403 for years). No TIME param needed — GeoServer
-  // auto-serves the freshest available image via its declared time dimension default.
-  nexradLayer = L.tileLayer.wms(CFG.nexradWms, {
-    layers: 'conus_base_reflectivity_mosaic',
-    version: '1.3.0',
-    format: 'image/png',
-    transparent: true,
-    opacity: 0.75,
-    attribution: 'NOAA/NWS NEXRAD (MRMS)',
-  }).addTo(map);
-
-  // Lightning strike density — real ground-based detection network data (NLDN/GLD360)
-  glmLayer = L.tileLayer.wms(CFG.glmWms, {
-    layers: 'ldn_lightning_strike_density',
-    version: '1.3.0',
-    format: 'image/png',
-    transparent: true,
-    opacity: 0.65,
-    attribution: 'NOAA/NWS Lightning Detection (NLDN/GLD360)',
-  }).addTo(map);
-
-  // 8-mile ring (yellow dashed)
+function drawRings(map) {
   L.circle([CFG.lat, CFG.lon], {
     radius: 12875,
     color: '#f4c430',
@@ -996,7 +967,6 @@ function initMap() {
     fillOpacity: 0.04,
   }).addTo(map).bindTooltip('8 mi', {permanent: false, direction: 'top'});
 
-  // 15-mile ring (red dashed)
   L.circle([CFG.lat, CFG.lon], {
     radius: 24140,
     color: '#e63946',
@@ -1007,7 +977,6 @@ function initMap() {
     fillOpacity: 0.02,
   }).addTo(map).bindTooltip('15 mi', {permanent: false, direction: 'top'});
 
-  // KBCT marker
   const kbctIcon = L.divIcon({
     html: '✈️',
     iconSize: [22, 22],
@@ -1017,6 +986,60 @@ function initMap() {
   L.marker([CFG.lat, CFG.lon], {icon: kbctIcon})
    .bindPopup('<strong>KBCT</strong><br>Boca Raton Airport')
    .addTo(map);
+}
+
+function initRadarMap() {
+  if (radarMap) return;
+  radarMap = L.map('radar-map', {
+    center: [CFG.lat, CFG.lon],
+    zoom: 9,
+    zoomControl: true,
+    attributionControl: true,
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://openstreetmap.org">OSM</a> © <a href="https://carto.com">CARTO</a>',
+    maxZoom: 15,
+    subdomains: 'abcd',
+  }).addTo(radarMap);
+
+  L.tileLayer.wms(CFG.nexradWms, {
+    layers: 'conus_base_reflectivity_mosaic',
+    version: '1.3.0',
+    format: 'image/png',
+    transparent: true,
+    opacity: 0.75,
+    attribution: 'NOAA/NWS NEXRAD (MRMS)',
+  }).addTo(radarMap);
+
+  drawRings(radarMap);
+}
+
+function initLightningMap() {
+  if (lightningMap) return;
+  lightningMap = L.map('lightning-map', {
+    center: [CFG.lat, CFG.lon],
+    zoom: 9,
+    zoomControl: true,
+    attributionControl: true,
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://openstreetmap.org">OSM</a> © <a href="https://carto.com">CARTO</a>',
+    maxZoom: 15,
+    subdomains: 'abcd',
+  }).addTo(lightningMap);
+
+  L.tileLayer.wms(CFG.glmWms, {
+    layers: 'ldn_lightning_strike_density',
+    version: '1.3.0',
+    format: 'image/png',
+    transparent: true,
+    opacity: 0.8,
+    attribution: 'NOAA/NWS Lightning Detection (NLDN/GLD360)',
+  }).addTo(lightningMap);
+
+  drawRings(lightningMap);
 }
 
 // ─── 6 ▸ SPC OUTLOOKS ─────────────────────────────────────────────
@@ -1179,7 +1202,10 @@ async function init() {
   fetchBluesky();
   renderSpc();
 
-  setTimeout(initMap, 50);
+  setTimeout(() => {
+    initRadarMap();
+    initLightningMap();
+  }, 50);
 
   setInterval(refreshConditions, CFG.condRefresh);
   setInterval(refreshLightning,  CFG.lgxRefresh);
