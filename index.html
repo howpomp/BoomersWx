@@ -576,16 +576,17 @@ const CFG = {
   nwsAlerts: 'https://api.weather.gov/alerts/active?point=26.3789,-80.1081',
   // METAR station fallback order
   stations: ['KBCT','KPMP','KFXE','KPBI','KFLL'],
-  // NWS radar base WMS — layer 0 = "Weather Radar Base Reflectivity Mosaic"
-  // (layer 1 is just the Boundary footprint — NOT the radar image. This was the first bug.)
-  nexradWms: 'https://nowcoast.noaa.gov/arcgis/services/nowcoast/radar_meteo_imagery_nexrad_time/MapServer/WmsServer',
-  // GLM strike-density WMS — layer 0 confirmed correct (this is NOAA/OPC's *emulated*
-  // strike-density product, not raw GOES GLM detections — fine for a visual overlay)
-  glmWms: 'https://nowcoast.noaa.gov/arcgis/services/nowcoast/sat_meteo_emulated_imagery_lightningstrikedensity_goes_time/MapServer/WmsServer',
+  // nowCOAST's old /arcgis/services/... path was retired 4/19/2023 (returns 403 —
+  // "no longer accepts requests to arcgis"). This was the real root cause of the
+  // radar/lightning map never rendering, confirmed via curl 2026-07-10. New
+  // GeoServer-based endpoints below, confirmed returning real 200 + PNG data:
+  nexradWms: 'https://nowcoast.noaa.gov/geoserver/observations/weather_radar/ows',
+  // Now real ground-based lightning detection (NLDN + GLD360), not the old
+  // 2015-era "emulated GLM" placeholder product.
+  glmWms: 'https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows',
   // Refresh intervals
   condRefresh: 120_000,   // 2 min
   lgxRefresh:   60_000,   // 1 min
-  wmsTimeRefresh: 120_000, // 2 min — keep WMS TIME window current
 };
 
 // SPC state-partner outlook thumbnails (built for embedding — different path than the
@@ -946,21 +947,6 @@ let map = null;
 let nexradLayer = null;
 let glmLayer = null;
 
-// nowCOAST time-enabled WMS layers need an explicit TIME range, or they silently
-// return nothing when the exact "present moment" has no available imagery yet
-// (which is most of the time, due to normal processing/upload lag).
-function wmsTimeRange() {
-  const now = new Date();
-  const past = new Date(now.getTime() - 30 * 60 * 1000); // 30 min window
-  return `${past.toISOString()}/${now.toISOString()}`;
-}
-
-function refreshWmsTime() {
-  const range = wmsTimeRange();
-  if (nexradLayer) nexradLayer.setParams({ TIME: range }, false);
-  if (glmLayer)    glmLayer.setParams({ TIME: range }, false);
-}
-
 function initMap() {
   if (map) return;
   map = L.map('radar-map', {
@@ -977,24 +963,26 @@ function initMap() {
     subdomains: 'abcd',
   }).addTo(map);
 
-  // NEXRAD composite reflectivity — layer 0, with explicit TIME range
+  // NEXRAD composite reflectivity — new GeoServer endpoint (old ArcGIS path retired
+  // 4/19/2023, was returning 403 for years). No TIME param needed — GeoServer
+  // auto-serves the freshest available image via its declared time dimension default.
   nexradLayer = L.tileLayer.wms(CFG.nexradWms, {
-    layers: '0',
+    layers: 'conus_base_reflectivity_mosaic',
+    version: '1.3.0',
     format: 'image/png',
     transparent: true,
     opacity: 0.75,
-    attribution: 'NOAA/NWS NEXRAD',
-    TIME: wmsTimeRange(),
+    attribution: 'NOAA/NWS NEXRAD (MRMS)',
   }).addTo(map);
 
-  // GLM lightning strike density — layer 0, with explicit TIME range
+  // Lightning strike density — real ground-based detection network data (NLDN/GLD360)
   glmLayer = L.tileLayer.wms(CFG.glmWms, {
-    layers: '0',
+    layers: 'ldn_lightning_strike_density',
+    version: '1.3.0',
     format: 'image/png',
     transparent: true,
     opacity: 0.65,
-    attribution: 'NOAA/OPC Emulated GLM',
-    TIME: wmsTimeRange(),
+    attribution: 'NOAA/NWS Lightning Detection (NLDN/GLD360)',
   }).addTo(map);
 
   // 8-mile ring (yellow dashed)
@@ -1195,7 +1183,6 @@ async function init() {
 
   setInterval(refreshConditions, CFG.condRefresh);
   setInterval(refreshLightning,  CFG.lgxRefresh);
-  setInterval(refreshWmsTime,    CFG.wmsTimeRefresh);
   setInterval(fetchBluesky, 600_000);
 }
 
